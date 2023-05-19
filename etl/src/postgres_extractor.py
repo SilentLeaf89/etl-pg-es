@@ -1,11 +1,13 @@
 from math import exp
+from time import sleep
+from typing import Generator
+
 from loguru import logger
 import psycopg2
 from psycopg2.extras import DictCursor
-from time import sleep
-from typing import Generator
+
+from settings import Dsn
 from storage import State
-from Settings import Dsn
 
 
 class PostgresExtractor:
@@ -72,10 +74,7 @@ class PostgresExtractor:
             result: Список кортежей несериализованных данных
                     Для SQLite: sqlite3.Row object
         """
-        while True:
-            results = self.cursor.fetchmany(self.batch_size)
-            if not results:
-                break
+        while results := self.cursor.fetchmany(self.batch_size):
             yield results
 
     def extract_movies(self, state: State) -> Generator:
@@ -127,10 +126,10 @@ class PostgresExtractor:
             ORDER BY (fw.modified, fw.title)
             OFFSET %s;
             """
-        self.cursor.execute(
-            sql_query,
-            (state.get_state('state_date'), state.get_state('offset'))
-        )
-
-        query = self.query_iter()
-        return query
+        with self.cursor as curs:
+            curs.execute(
+                sql_query,
+                (state.get_state('state_date'), state.get_state('offset'))
+            )
+            query = self.query_iter()
+            yield query

@@ -2,11 +2,11 @@ import datetime
 from time import sleep
 
 from dotenv import load_dotenv
+from elastic_loader import ElasticLoader
 from loguru import logger
-from storage import JsonFileStorage, State
-from PostgresExtractor import PostgresExtractor
 from models import FilmworkSchema
-from ElasticLoader import ElasticLoader
+from postgres_extractor import PostgresExtractor
+from storage import JsonFileStorage, State
 
 
 def init_json_storage(path):
@@ -115,47 +115,49 @@ if __name__ == '__main__':
 
     # основной цикл
     while True:
-
-        # пробуй поодключиться
-        logger.info('Create connection started')
+        # пробуй подключиться
+        logger.info('Create pg connection started')
         postgres_extractor = PostgresExtractor(
             batch_size=BATCH_SIZE_LOAD_PG)
-        logger.info('Connection successful')
+        logger.info('Connection pg successful')
 
-        logger.info('Start loading')
+        logger.info('Start loading from pg')
         extract_movies = load_from_pg(state, postgres_extractor)
-        logger.info('Finish loading')
+        logger.info('Finish loading from pg')
 
         logger.info('Create connection ES started')
         es_loader = ElasticLoader()
         logger.info('Connection ES successful')
 
         data_bulk = []
-        # забрать батч из всего запроса
-        for batch_movies in extract_movies:
-            # преобразовать к загрузке через bulk
-            for movie in batch_movies:
-                last_modified = (movie['modified'])
-                movie = FilmworkSchema(**movie)
-                # подготовка данных к bulk
-                init_line = {
-                    "index": {
-                        "_index": 'movies',
-                        "_id": movie.id
+
+        # забрать генератор
+        for generator_movies in extract_movies:
+            # забрать батч из одного генератора
+            for batch_movies in generator_movies:
+                # преобразовать к загрузке через bulk
+                for movie in batch_movies:
+                    last_modified = movie['modified']
+                    movie = FilmworkSchema(**movie)
+                    # подготовка данных к bulk
+                    init_line = {
+                        "index": {
+                            "_index": 'movies',
+                            "_id": movie.id
+                        }
                     }
-                }
-                data_bulk.append(init_line)
-                data_bulk.append(movie.json())
+                    data_bulk.append(init_line)
+                    data_bulk.append(movie.json())
 
-            # bulk загрузка в ES одного батча
-            if data_bulk:
-                if es_loader.connect():
-                    load_data_es(data_bulk)
+                # bulk загрузка в ES одного батча
+                if data_bulk:
+                    if es_loader.connect():
+                        load_data_es(data_bulk)
 
-            # обновляем состояние внутри запроса
-            offset += len(data_bulk)
-            state.set_state('offset', offset)
-            data_bulk = []
+                # обновляем состояние внутри запроса
+                offset += len(data_bulk)
+                state.set_state('offset', offset)
+                data_bulk = []
 
         # по завершению запроса
         postgres_extractor.close_connect()

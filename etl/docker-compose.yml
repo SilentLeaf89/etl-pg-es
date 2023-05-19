@@ -1,0 +1,59 @@
+version: '3'
+services:
+  etl:
+    build:
+      context: .
+    container_name: etl_update
+    env_file:
+      - ./env/.env.pg_extractor
+    environment:
+      DB_HOST: db
+      HOST_ES: http://elastic:9200
+    networks:
+      - sprint_3_net
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command:
+      python src/load_data.py
+
+  db:
+    image: postgres:13-alpine
+    container_name: postgres-13-alpine
+    env_file:
+      - ./env/.env.db
+    volumes:
+      - pg_data:/var/lib/postgresql/data/
+      - ./dump/dump.sql:/docker-entrypoint-initdb.d/dump.sql:ro
+    networks:
+      - sprint_3_net
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app", "-d", "movies_database"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  elastic:
+    image: elasticsearch:8.6.2
+    container_name: elasticsearch-8.6.2
+    environment:
+      - "discovery.type=single-node"
+      - xpack.security.enabled=false
+    networks:
+      - sprint_3_net
+    ports:
+      - "9200:9200"
+    depends_on:
+      - db
+    restart: always
+
+volumes:
+  pg_data:
+
+networks:
+  sprint_3_net:
+    name: sprint_3_net

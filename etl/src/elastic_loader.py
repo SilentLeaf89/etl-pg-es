@@ -1,11 +1,14 @@
 import json
 from math import exp
+import os
 from time import sleep
-# from typing import List
 
+from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from loguru import logger
-# from models import FilmworkSchema
+
+
+load_dotenv()
 
 
 class ElasticLoader:
@@ -23,7 +26,7 @@ class ElasticLoader:
     """
     def __init__(
             self,
-            host: str = "http://localhost:9200"
+            host: str = os.environ.get('HOST_ES')
             ):
         self.host = host
         self.es = self.connect()

@@ -22,5 +22,3 @@ venv.bak/
 
 # temp files
 test.ipynb
-ETLTests-2.json
-docker-compose.yml
